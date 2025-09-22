@@ -2,7 +2,9 @@ package edu.jsu.mcis.cs310;
 
 import com.github.cliftonlabs.json_simple.*;
 import com.opencsv.*;
-
+import java.io.StringReader;
+import java.io.StringWriter;
+import java.util.List;
 public class Converter {
     
     /*
@@ -77,9 +79,48 @@ public class Converter {
         String result = "{}"; // default return value; replace later!
         
         try {
-        
-            // INSERT YOUR CODE HERE
-            
+            try (CSVReader reader = new CSVReaderBuilder(new StringReader(csvString)).build()) {
+                List<String[]> rows = reader.readAll();
+                if (rows.isEmpty()) {
+                    JsonObject empty = new JsonObject();
+                    empty.put("ProdNums", new JsonArray());
+                    empty.put("ColHeadings", new JsonArray());
+                    empty.put("Data", new JsonArray());
+                    return Jsoner.serialize(empty);
+                }
+                
+                String[] header = rows.get(0);
+                
+                JsonArray colHeadings = new JsonArray();
+                for (String h : header) colHeadings.add(h);
+                
+                JsonArray prodNums = new JsonArray();
+                JsonArray data = new JsonArray();
+                
+                for (int i = 1; i < rows.size(); i++) {
+                    String[] row = rows.get(i);
+                    if (row == null || row.length == 0) continue;
+                    
+                    prodNums.add(row[0]);
+                    
+                    JsonArray one = new JsonArray();
+                    
+                    one.add(row[1]);
+                    one.add(Integer.parseInt(row[2].trim()));
+                    one.add(Integer.parseInt(row[3].trim()));
+                    one.add(row[4]);
+                    one.add(row[5]);
+                    one.add(row.length > 6 ? row[6] : "");
+                    
+                    data.add(one);
+                }
+                JsonObject root = new JsonObject();
+                root.put("ProdNums", prodNums);
+                root.put("ColHeadings", colHeadings);
+                root.put("Data", data);
+                
+                result = Jsoner.serialize(root);
+            }
         }
         catch (Exception e) {
             e.printStackTrace();
@@ -95,9 +136,57 @@ public class Converter {
         String result = ""; // default return value; replace later!
         
         try {
+            Object parsed = Jsoner.deserialize(jsonString);
+            JsonObject root = (JsonObject) parsed;
             
-            // INSERT YOUR CODE HERE
+            JsonArray colHeadings = (JsonArray) root.get("ColHeadings");
+            JsonArray prodNums = (JsonArray) root.get("ProdNums");
+            JsonArray data = (JsonArray) root.get("Data");
             
+            StringWriter out = new StringWriter();
+            
+            try (CSVWriter writer = new CSVWriter(
+                    out,
+                    CSVWriter.DEFAULT_SEPARATOR,
+                    CSVWriter.DEFAULT_QUOTE_CHARACTER,
+                    CSVWriter.DEFAULT_ESCAPE_CHARACTER,
+                    "\n"
+            )){
+                
+                String[] header = new String[colHeadings.size()];
+                for (int i = 0; i < colHeadings.size(); i++) {
+                    header[i] = String.valueOf(colHeadings.get(i));
+                }
+                writer.writeNext(header, true);
+                
+                for (int i = 0; i < data.size(); i++) {
+                    JsonArray rowData = (JsonArray) data.get(i);
+                    
+                    String prodNum = String.valueOf(prodNums.get(i));
+                    String title = String.valueOf(rowData.get(0));
+                    int season = ((Number) rowData.get(1)).intValue();
+                    int episode = ((Number) rowData.get(2)).intValue();
+                    String stardate = String.valueOf(rowData.get(3));
+                    String originalAirdate = String.valueOf(rowData.get(4));
+                    String remasteredAirdate = String.valueOf(rowData.get(5));
+                    
+                    String episodeStr = String.format("%02d", episode);
+                    
+                    String[] csvRow = new String[] {
+                        prodNum,
+                        title,
+                        String.valueOf(season),
+                        episodeStr,
+                        stardate,
+                        originalAirdate,
+                        remasteredAirdate
+                    };
+                    
+                    writer.writeNext(csvRow, true);
+                }
+            }
+            
+            result = out.toString();
         }
         catch (Exception e) {
             e.printStackTrace();
